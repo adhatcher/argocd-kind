@@ -236,3 +236,5 @@ httproute.gateway.networking.k8s.io/argocd-route created
 task: Task "update-gateway" is up to date
 task: [open-app] open http://argocd.local
 ```
+
+</details>

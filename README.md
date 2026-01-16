@@ -146,7 +146,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 echo
 ```
 
-cppH5uEXdCmxUZzb
+********
 
 ## Create gateway for argocd-server
 
@@ -202,6 +202,37 @@ spec:
 kubectl patch configmap argocd-cmd-params-cm -n argocd -p '{"data":{"server.insecure":"true"}}'
 ```
 
-## TLDR;
+## TLDR
 
 Run `Taskfile.yml` to install argocd
+
+```sh
+$ task
+```
+
+<details>
+  <summary>Click to see task run results</summary>
+
+```sh
+task: [check-docker-running] docker info > /dev/null 2>&1
+task: [check-cluster-running] kind get clusters | grep gwkc-1
+task: [check-cloud-provider-kind-running] pgrep sudo cloud-provider-kind
+39373
+39375
+39376
+gwkc-1
+task: [deploy-app] kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+echo
+kubectl patch configmap argocd-cmd-params-cm -n argocd -p '{"data":{"server.insecure":"true"}}'
+task: [get_password] echo "Password is: " xxxxxx-xxxxx
+
+Password is:  xxxxxx-xxxxx
+
+configmap/argocd-cmd-params-cm patched
+task: [deploy-httproute] kubectl apply -f httproute.yml
+httproute.gateway.networking.k8s.io/argocd-route created
+task: Task "update-gateway" is up to date
+task: [open-app] open http://argocd.local
+```

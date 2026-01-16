@@ -67,6 +67,7 @@ tasks:
       - kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
     status:
       - kubectl get deployment argocd-server -n argocd
+    silent: true
 
   disable_tls:
     run: once

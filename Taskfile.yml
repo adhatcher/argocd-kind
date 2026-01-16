@@ -1,0 +1,131 @@
+---
+version: '3'
+
+vars:
+  CLUSTER_NAME: gwkc-1
+  DEPENDENCIES:
+    - docker
+    - kind
+    - cloud-provider-kind
+    - kubectl
+
+tasks:
+  check-docker-running:
+    cmds:
+      - docker info > /dev/null 2>&1
+
+  check-cluster-running:
+    cmds:
+      - kind get clusters | grep {{.CLUSTER_NAME}}
+
+  check-cloud-provider-kind-running:
+    cmds:
+      - pgrep sudo cloud-provider-kind
+
+  default:
+    aliases: [all, make]
+    deps:
+      - check-dependencies
+      - update-gateway
+      - create_namespace
+      - deploy-app
+      - disable_tls
+      - get_password
+      - deploy-httproute
+      - open-app
+
+  check-dependencies:
+    silent: true
+    cmds:
+      - |
+        {{range .DEPENDENCIES}}
+          if ! command -v {{.}} > /dev/null; then
+            echo "{{.}} not found"
+          fi
+        {{end}}
+
+  create_namespace:
+    run: once
+    deps:
+      - check-cluster-running
+    cmds:
+      - kubectl create namespace argocd || echo "namespace argocd already exists"
+    status:
+      - kubectl get namespace argocd
+
+  clean_namespace:
+    cmds:
+      - kubectl delete namespace argocd
+
+  deploy-app:
+    run: once
+    deps:
+      - check-docker-running
+      - check-cluster-running
+      - check-cloud-provider-kind-running
+    cmds:
+      - kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    status:
+      - kubectl get deployment argocd-server -n argocd
+
+  disable_tls:
+    run: once
+    deps:
+      - deploy-app
+    cmds:
+      - |
+          kubectl -n argocd patch svc argocd-server -p '{"spec": {"ports": [{"name": "https", "port": 443, "targetPort": 8080, "nodePort": 0}]}}'
+    status:
+      - kubectl -n argocd get svc argocd-server -o jsonpath="{.spec.ports[?(@.name=='https')]}"
+
+  
+  clean-app:
+    cmds:
+      - kubectl delete namespace argocd
+  
+  update-gateway:
+    run: once  
+    deps:
+      - deploy-app
+    cmds:
+      - kubectl apply -f argo-gateway.yml
+    status:
+      - kubectl diff -f argo-gateway.yml
+
+
+  deploy-httproute:
+    deps:
+      - deploy-app
+    cmds:
+      - kubectl apply -f httproute.yml
+    status:
+      - kubectl diff -f httproute.yml
+  
+  clean-httproute:
+    cmds:
+      - kubectl delete -f httproute.yml
+
+  get_password:
+    # deps:
+    #   - deploy-app
+    cmds:
+      - |
+        echo "Password is: " {{.PASSWORD}}
+    vars:
+      PASSWORD:
+        sh: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode 
+  
+  open-app:
+    deps:
+      - deploy-app
+    cmds:
+      - open http://argocd.local
+  
+  clean:
+    aliases: [delete]
+    ignore_error: true
+    cmds:
+      - task: clean-httproute
+      - task: clean-app
+      
+    

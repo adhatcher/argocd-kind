@@ -26,12 +26,13 @@ tasks:
     aliases: [all, make]
     deps:
       - check-dependencies
-      - update-gateway
-      - create_namespace
+      #- update-gateway
+      - create-namespace
       - deploy-app
-      - disable_tls
-      - get_password
+      - disable-tls
+      - restart-deployment
       - deploy-httproute
+      - get-password
       - open-app
 
   check-dependencies:
@@ -44,7 +45,7 @@ tasks:
           fi
         {{end}}
 
-  create_namespace:
+  create-namespace:
     run: once
     deps:
       - check-cluster-running
@@ -53,7 +54,7 @@ tasks:
     status:
       - kubectl get namespace argocd
 
-  clean_namespace:
+  clean-namespace:
     cmds:
       - kubectl delete namespace argocd
 
@@ -69,34 +70,32 @@ tasks:
       - kubectl get deployment argocd-server -n argocd
     silent: true
 
-  disable_tls:
+  disable-tls:
     run: once
     deps:
       - deploy-app
     cmds:
-      - |
-          kubectl -n argocd patch svc argocd-server -p '{"spec": {"ports": [{"name": "https", "port": 443, "targetPort": 8080, "nodePort": 0}]}}'
+      -   kubectl patch configmap argocd-cmd-params-cm -n argocd -p '{"data":{"server.insecure":"true"}}'
+      -   kubectl --namespace argocd rollout restart deployment argocd-server
     status:
-      - kubectl -n argocd get svc argocd-server -o jsonpath="{.spec.ports[?(@.name=='https')]}"
+      - kubectl wait --for=condition=available --timeout=120s deployment/argocd-server -n argocd
 
+  restart-deployment:
+    deps:
+      - disable-tls
+    cmds:
+      - kubectl --namespace argocd rollout restart deployment argocd-server
+    status:
+      - kubectl wait --for=condition=ready pod --all -n argocd --timeout=120s
   
   clean-app:
     cmds:
       - kubectl delete namespace argocd
   
-  update-gateway:
-    run: once  
-    deps:
-      - deploy-app
-    cmds:
-      - kubectl apply -f argo-gateway.yml
-    status:
-      - kubectl diff -f argo-gateway.yml
-
 
   deploy-httproute:
     deps:
-      - deploy-app
+      - disable-tls
     cmds:
       - kubectl apply -f httproute.yml
     status:
@@ -106,7 +105,7 @@ tasks:
     cmds:
       - kubectl delete -f httproute.yml
 
-  get_password:
+  get-password:
     # deps:
     #   - deploy-app
     cmds:
@@ -118,7 +117,7 @@ tasks:
   
   open-app:
     deps:
-      - deploy-app
+      - deploy-httproute
     cmds:
       - open http://argocd.local
   
